@@ -71,9 +71,9 @@ jobs:
           TITLE=$(jq -r ".templates.\"${TEMPLATE}\".title" "$CONFIG")
           SUBTITLE=$(jq -r ".templates.\"${TEMPLATE}\".subtitle" "$CONFIG")
 
-          # 4. 模板变量替换
-          TITLE=$(echo "$TITLE" | sed -e "s/{repository}/${REPO}/g" -e "s/{title}/${{ github.event.inputs.title }}/g")
-          SUBTITLE=$(echo "$SUBTITLE" | sed -e "s/{repository}/${REPO}/g")
+          # 4. 模板变量替换（使用 | 作为 sed 分隔符避免 / 冲突）
+          TITLE=$(echo "$TITLE" | sed -e "s|{repository}|${REPO}|g" -e "s|{title}|${{ github.event.inputs.title }}|g")
+          SUBTITLE=$(echo "$SUBTITLE" | sed -e "s|{repository}|${REPO}|g")
 
           # 5. 构建字段区域
           FIELDS_JSON=""
@@ -82,11 +82,11 @@ jobs:
             LABEL=$(jq -r ".templates.\"${TEMPLATE}\".fields[$i].label" "$CONFIG")
             VALUE=$(jq -r ".templates.\"${TEMPLATE}\".fields[$i].value" "$CONFIG")
             VALUE=$(echo "$VALUE" | sed \
-              -e "s/{repository}/${REPO//\//\\/}/g" \
-              -e "s/{branch}/${BRANCH}/g" \
-              -e "s/{actor}/${ACTOR}/g" \
-              -e "s/{message}/${MESSAGE//\"/\\\"}/g" \
-              -e "s/{content}/${{ github.event.inputs.content }}/g")
+              -e "s|{repository}|${REPO}|g" \
+              -e "s|{branch}|${BRANCH}|g" \
+              -e "s|{actor}|${ACTOR}|g" \
+              -e "s|{message}|${MESSAGE//\"/\\\"}|g" \
+              -e "s|{content}|${{ github.event.inputs.content }}|g")
             FIELDS_JSON="${FIELDS_JSON}{\"tag\":\"div\",\"text\":{\"content\":\"**${LABEL}**\\n${VALUE}\",\"tag\":\"lark_md\"}},"
           done
 
@@ -96,7 +96,7 @@ jobs:
           for i in $(seq 0 $((BUTTON_COUNT - 1))); do
             BTN_TEXT=$(jq -r ".templates.\"${TEMPLATE}\".buttons[$i].text" "$CONFIG")
             BTN_URL=$(jq -r ".templates.\"${TEMPLATE}\".buttons[$i].url" "$CONFIG")
-            BTN_URL=$(echo "$BTN_URL" | sed -e "s/{repository}/${REPO//\//\\/}/g" -e "s/{branch}/${BRANCH}/g")
+            BTN_URL=$(echo "$BTN_URL" | sed -e "s|{repository}|${REPO}|g" -e "s|{branch}|${BRANCH}|g")
             BUTTONS_JSON="${BUTTONS_JSON}{\"tag\":\"button\",\"text\":{\"content\":\"${BTN_TEXT}\",\"tag\":\"plain_text\"},\"type\":\"primary\",\"url\":\"${BTN_URL}\"},"
           done
 
