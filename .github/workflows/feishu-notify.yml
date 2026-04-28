@@ -1,4 +1,4 @@
-name: 飞书消息通知
+name: 飞书自建应用消息通知
 
 on:
   workflow_dispatch:
@@ -28,12 +28,29 @@ jobs:
     steps:
       - name: 发送飞书消息卡片
         env:
-          FEISHU_ID: ${{ secrets.FEISHU_ID }}
-          FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
+          FEISHU_APP_ID: ${{ secrets.FEISHU_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_SECRET }}
+          FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
         run: |
-          TIMESTAMP=$(date +%s)
-          SIGN=$(echo -en "${TIMESTAMP}\n${FEISHU_SECRET}" | openssl dgst -sha256 -hmac "${FEISHU_SECRET}" -binary | base64)
+          # 1. 获取 tenant_access_token
+          TOKEN_RESPONSE=$(curl -s -X POST "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "app_id": "'"${FEISHU_APP_ID}"'",
+              "app_secret": "'"${FEISHU_APP_SECRET}"'"
+            }')
 
+          echo "获取 Token 响应: ${TOKEN_RESPONSE}"
+
+          TOKEN=$(echo "${TOKEN_RESPONSE}" | grep -o '"tenant_access_token":"[^"]*"' | cut -d'"' -f4)
+          CODE=$(echo "${TOKEN_RESPONSE}" | grep -o '"code":[0-9]*' | cut -d: -f2)
+
+          if [ "${CODE}" != "0" ] || [ -z "${TOKEN}" ]; then
+            echo "::error::获取 tenant_access_token 失败，请检查 FEISHU_ID 和 FEISHU_SECRET"
+            exit 1
+          fi
+
+          # 2. 确定样式
           case "${{ github.event.inputs.status }}" in
             success) COLOR="green"; ICON="✅" ;;
             failure) COLOR="red"; ICON="❌" ;;
@@ -41,22 +58,23 @@ jobs:
             info) COLOR="blue"; ICON="ℹ️" ;;
           esac
 
-          curl -s -X POST "https://open.feishu.cn/open-apis/bot/v2/hook/${FEISHU_ID}" \
+          # 3. 发送消息卡片
+          MSG_RESPONSE=$(curl -s -X POST "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id" \
+            -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{
-              "timestamp": "'"${TIMESTAMP}"'",
-              "sign": "'"${SIGN}"'",
+              "receive_id": "'"${FEISHU_CHAT_ID}"'",
               "msg_type": "interactive",
-              "card": {
-                "config": {"wide_screen_mode": true},
-                "header": {
-                  "template": "'"${COLOR}"'",
-                  "title": {"content": "'"${ICON} ${{ github.event.inputs.title }}"'", "tag": "plain_text"}
-                },
-                "elements": [
-                  {"tag": "div", "text": {"content": "${{ github.event.inputs.content }}", "tag": "lark_md"}},
-                  {"tag": "hr"},
-                  {"tag": "note", "elements": [{"tag": "plain_text", "content": "发送时间: '"$(date '+%Y-%m-%d %H:%M:%S')"'"}]}
-                ]
-              }
-            }'
+              "content": "{\"config\":{\"wide_screen_mode\":true},\"header\":{\"template\":\"'"${COLOR}"'\",\"title\":{\"content\":\"'"${ICON} ${{ github.event.inputs.title }}"'\",\"tag\":\"plain_text\"}},\"elements\":[{\"tag\":\"div\",\"text\":{\"content\":\"${{ github.event.inputs.content }}\",\"tag\":\"lark_md\"}},{\"tag\":\"hr\"},{\"tag\":\"note\",\"elements\":[{\"tag\":\"plain_text\",\"content\":\"发送时间: '"$(date '+%Y-%m-%d %H:%M:%S')"'\"}]}]}"
+            }')
+
+          echo "发送消息响应: ${MSG_RESPONSE}"
+
+          MSG_CODE=$(echo "${MSG_RESPONSE}" | grep -o '"code":[0-9]*' | cut -d: -f2)
+          if [ "${MSG_CODE}" != "0" ]; then
+            MSG_MSG=$(echo "${MSG_RESPONSE}" | grep -o '"msg":"[^"]*"' | cut -d'"' -f4)
+            echo "::error::发送失败，错误码: ${MSG_CODE} - ${MSG_MSG}"
+            exit 1
+          fi
+
+          echo "消息发送成功！"
