@@ -25,21 +25,38 @@
 | `FEISHU_SECRET` | 飞书自建应用的 **App Secret** |
 | `FEISHU_CHAT_ID` | 飞书群聊 **chat_id** |
 
-### 4. 发送消息
+### 4. 触发方式
 
+**自动触发：**
+- 🚀 **代码提交**：推送代码到 main/master/develop 分支时自动发送
+- 📅 **每周定时**：每周一 8:00 自动发送提醒
+
+**手动触发：**
 1. 进入仓库的 **Actions** 页面
 2. 点击左侧的 **飞书自建应用消息通知**
 3. 点击 **Run workflow**
 4. 填写标题、内容、选择状态
 5. 点击 **Run workflow** 即可发送
 
-## 工作流文件
+## 文件结构
 
-**[.github/workflows/feishu-notify.yml](.github/workflows/feishu-notify.yml)**
+| 文件 | 说明 |
+|-----|------|
+| **[.github/workflows/feishu-notify.yml](.github/workflows/feishu-notify.yml)** | 工作流主文件 |
+| **[.github/config/message-templates.json](.github/config/message-templates.json)** | 样式和消息模板配置 |
 
-- 单一文件，无其他依赖
-- 自动获取 tenant_access_token
-- 详细的错误日志输出
+### 架构特点
+
+- ✅ **样式与逻辑解耦**：颜色、图标全部在配置文件中
+- ✅ **易于维护**：修改样式无需改动工作流代码
+- ✅ **可扩展**：轻松添加新的消息类型和样式
+
+### 自定义样式
+
+编辑 `message-templates.json` 即可修改：
+- 各状态的颜色和图标
+- 不同触发方式的消息标题
+- 卡片配置参数
 
 ## 状态样式
 
