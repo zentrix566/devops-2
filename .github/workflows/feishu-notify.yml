@@ -79,23 +79,24 @@ jobs:
             TITLE="$MANUAL_TITLE"
           fi
 
-          # 5. 构建字段内容
+          # 5. 构建字段内容（使用真实换行符）
+          NL=$'\n'
           if [ "$TEMPLATE" = "push" ]; then
-            FIELD1="**📦 仓库**\n${REPO}"
-            FIELD2="**🌿 分支**\n${BRANCH}"
-            FIELD3="**👤 提交者**\n${ACTOR}"
-            FIELD4="**📝 提交信息**\n${MESSAGE}"
+            FIELD1="**📦 仓库**${NL}${REPO}"
+            FIELD2="**🌿 分支**${NL}${BRANCH}"
+            FIELD3="**👤 提交者**${NL}${ACTOR}"
+            FIELD4="**📝 提交信息**${NL}${MESSAGE}"
             BUTTON_TEXT="查看提交记录"
             BUTTON_URL="https://github.com/${REPO}/commits/${BRANCH}"
           elif [ "$TEMPLATE" = "schedule" ]; then
-            FIELD1="**📦 项目仓库**\n${REPO}"
-            FIELD2="**🟢 运行状态**\n正常运行中"
-            FIELD3="**⏰ 最近部署**\n本周内"
-            FIELD4="**📅 下次检查**\n下周一 8:00"
+            FIELD1="**📦 项目仓库**${NL}${REPO}"
+            FIELD2="**🟢 运行状态**${NL}正常运行中"
+            FIELD3="**⏰ 最近部署**${NL}本周内"
+            FIELD4="**📅 下次检查**${NL}下周一 8:00"
             BUTTON_TEXT="访问项目主页"
             BUTTON_URL="https://github.com/${REPO}"
           else
-            FIELD1="**📋 详情**\n${MANUAL_CONTENT}"
+            FIELD1="**📋 详情**${NL}${MANUAL_CONTENT}"
             FIELD2=""
             FIELD3=""
             FIELD4=""
