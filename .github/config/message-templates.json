@@ -25,52 +25,18 @@
       "icon": "📅"
     }
   },
-  "card": {
-    "config": {
-      "wide_screen_mode": true,
-      "enable_forward": true
-    },
-    "footer": {
-      "show_time": true,
-      "show_repo": true
-    }
-  },
   "templates": {
     "push": {
       "title": "代码部署通知",
-      "subtitle": "新代码已推送到仓库",
-      "fields": [
-        {"key": "repository", "label": "📦 仓库", "value": "{repository}"},
-        {"key": "branch", "label": "🌿 分支", "value": "{branch}"},
-        {"key": "actor", "label": "👤 提交者", "value": "{actor}"},
-        {"key": "commit", "label": "📝 提交信息", "value": "{message}"}
-      ],
-      "buttons": [
-        {"text": "查看提交记录", "url": "https://github.com/{repository}/commits/{branch}"}
-      ]
+      "subtitle": "新代码已推送到仓库"
     },
     "schedule": {
       "title": "每周运维周报",
-      "subtitle": "项目运行状态定时报告",
-      "fields": [
-        {"key": "repository", "label": "📦 项目仓库", "value": "{repository}"},
-        {"key": "status", "label": "🟢 运行状态", "value": "正常运行中"},
-        {"key": "last_deploy", "label": "⏰ 最近部署", "value": "本周内"},
-        {"key": "next_check", "label": "📅 下次检查", "value": "下周一 8:00"}
-      ],
-      "buttons": [
-        {"text": "访问项目主页", "url": "https://github.com/{repository}"}
-      ]
+      "subtitle": "项目运行状态定时报告"
     },
     "manual": {
-      "title": "{title}",
-      "subtitle": "手动触发通知",
-      "fields": [
-        {"key": "content", "label": "📋 详情", "value": "{content}"}
-      ],
-      "buttons": [
-        {"text": "查看 GitHub", "url": "https://github.com/{repository}"}
-      ]
+      "title": "运维通知",
+      "subtitle": "手动触发通知"
     }
   }
 }

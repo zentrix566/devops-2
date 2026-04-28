@@ -43,17 +43,20 @@ jobs:
           BRANCH: ${{ github.ref_name }}
           ACTOR: ${{ github.actor }}
           MESSAGE: ${{ github.event.head_commit.message }}
+          MANUAL_TITLE: ${{ github.event.inputs.title }}
+          MANUAL_CONTENT: ${{ github.event.inputs.content }}
+          EVENT: ${{ github.event_name }}
+          STATUS: ${{ github.event.inputs.status }}
         run: |
           # 1. 获取 Token
           TOKEN=$(curl -s -X POST "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal" \
             -H "Content-Type: application/json" \
             -d "{\"app_id\":\"${FEISHU_APP_ID}\",\"app_secret\":\"${FEISHU_APP_SECRET}\"}" \
-            | grep -o '"tenant_access_token":"[^"]*"' | cut -d'"' -f4)
+            | jq -r '.tenant_access_token')
 
-          [ -z "$TOKEN" ] && { echo "::error::获取 Token 失败"; exit 1; }
+          [ "$TOKEN" = "null" ] && { echo "::error::获取 Token 失败"; exit 1; }
 
-          # 2. 确定模板类型和样式
-          EVENT="${{ github.event_name }}"
+          # 2. 确定模板类型
           if [ "$EVENT" = "push" ]; then
             TEMPLATE="push"
             STYLE="push"
@@ -62,52 +65,82 @@ jobs:
             STYLE="schedule"
           else
             TEMPLATE="manual"
-            STYLE="${{ github.event.inputs.status }}"
+            STYLE="$STATUS"
           fi
 
-          # 3. 读取配置
+          # 3. 读取样式
           COLOR=$(jq -r ".styles.\"${STYLE}\".color" "$CONFIG")
           ICON=$(jq -r ".styles.\"${STYLE}\".icon" "$CONFIG")
           TITLE=$(jq -r ".templates.\"${TEMPLATE}\".title" "$CONFIG")
           SUBTITLE=$(jq -r ".templates.\"${TEMPLATE}\".subtitle" "$CONFIG")
 
-          # 4. 模板变量替换（使用 | 作为 sed 分隔符避免 / 冲突）
-          TITLE=$(echo "$TITLE" | sed -e "s|{repository}|${REPO}|g" -e "s|{title}|${{ github.event.inputs.title }}|g")
-          SUBTITLE=$(echo "$SUBTITLE" | sed -e "s|{repository}|${REPO}|g")
+          # 4. 直接替换标题变量
+          if [ "$TEMPLATE" = "manual" ]; then
+            TITLE="$MANUAL_TITLE"
+          fi
 
-          # 5. 构建字段区域
-          FIELDS_JSON=""
-          FIELD_COUNT=$(jq ".templates.\"${TEMPLATE}\".fields | length" "$CONFIG")
-          for i in $(seq 0 $((FIELD_COUNT - 1))); do
-            LABEL=$(jq -r ".templates.\"${TEMPLATE}\".fields[$i].label" "$CONFIG")
-            VALUE=$(jq -r ".templates.\"${TEMPLATE}\".fields[$i].value" "$CONFIG")
-            VALUE=$(echo "$VALUE" | sed \
-              -e "s|{repository}|${REPO}|g" \
-              -e "s|{branch}|${BRANCH}|g" \
-              -e "s|{actor}|${ACTOR}|g" \
-              -e "s|{message}|${MESSAGE//\"/\\\"}|g" \
-              -e "s|{content}|${{ github.event.inputs.content }}|g")
-            FIELDS_JSON="${FIELDS_JSON}{\"tag\":\"div\",\"text\":{\"content\":\"**${LABEL}**\\n${VALUE}\",\"tag\":\"lark_md\"}},"
-          done
+          # 5. 构建字段内容
+          if [ "$TEMPLATE" = "push" ]; then
+            FIELD1="**📦 仓库**\n${REPO}"
+            FIELD2="**🌿 分支**\n${BRANCH}"
+            FIELD3="**👤 提交者**\n${ACTOR}"
+            FIELD4="**📝 提交信息**\n${MESSAGE}"
+            BUTTON_TEXT="查看提交记录"
+            BUTTON_URL="https://github.com/${REPO}/commits/${BRANCH}"
+          elif [ "$TEMPLATE" = "schedule" ]; then
+            FIELD1="**📦 项目仓库**\n${REPO}"
+            FIELD2="**🟢 运行状态**\n正常运行中"
+            FIELD3="**⏰ 最近部署**\n本周内"
+            FIELD4="**📅 下次检查**\n下周一 8:00"
+            BUTTON_TEXT="访问项目主页"
+            BUTTON_URL="https://github.com/${REPO}"
+          else
+            FIELD1="**📋 详情**\n${MANUAL_CONTENT}"
+            FIELD2=""
+            FIELD3=""
+            FIELD4=""
+            BUTTON_TEXT="查看 GitHub"
+            BUTTON_URL="https://github.com/${REPO}"
+          fi
 
-          # 6. 构建按钮
-          BUTTONS_JSON=""
-          BUTTON_COUNT=$(jq ".templates.\"${TEMPLATE}\".buttons | length" "$CONFIG")
-          for i in $(seq 0 $((BUTTON_COUNT - 1))); do
-            BTN_TEXT=$(jq -r ".templates.\"${TEMPLATE}\".buttons[$i].text" "$CONFIG")
-            BTN_URL=$(jq -r ".templates.\"${TEMPLATE}\".buttons[$i].url" "$CONFIG")
-            BTN_URL=$(echo "$BTN_URL" | sed -e "s|{repository}|${REPO}|g" -e "s|{branch}|${BRANCH}|g")
-            BUTTONS_JSON="${BUTTONS_JSON}{\"tag\":\"button\",\"text\":{\"content\":\"${BTN_TEXT}\",\"tag\":\"plain_text\"},\"type\":\"primary\",\"url\":\"${BTN_URL}\"},"
-          done
+          # 6. 构建卡片 JSON
+          CARD_JSON=$(jq -n \
+            --arg color "$COLOR" \
+            --arg icon "$ICON" \
+            --arg title "$TITLE" \
+            --arg subtitle "$SUBTITLE" \
+            --arg f1 "$FIELD1" \
+            --arg f2 "$FIELD2" \
+            --arg f3 "$FIELD3" \
+            --arg f4 "$FIELD4" \
+            --arg btn_text "$BUTTON_TEXT" \
+            --arg btn_url "$BUTTON_URL" \
+            --arg repo "$REPO" \
+            --arg time "$(date '+%Y-%m-%d %H:%M:%S')" \
+            '{
+              config: {wide_screen_mode: true, enable_forward: true},
+              header: {
+                template: $color,
+                title: {content: ($icon + " " + $title), tag: "plain_text"}
+              },
+              elements: [
+                {tag: "div", text: {content: ("> " + $subtitle), tag: "lark_md"}},
+                {tag: "hr"},
+                {tag: "div", text: {content: $f1, tag: "lark_md"}},
+                (if $f2 != "" then {tag: "div", text: {content: $f2, tag: "lark_md"}} else null end),
+                (if $f3 != "" then {tag: "div", text: {content: $f3, tag: "lark_md"}} else null end),
+                (if $f4 != "" then {tag: "div", text: {content: $f4, tag: "lark_md"}} else null end),
+                {tag: "hr"},
+                {tag: "action", actions: [{tag: "button", text: {content: $btn_text, tag: "plain_text"}, type: "primary", url: $btn_url}]},
+                {tag: "note", elements: [{tag: "plain_text", content: ("📁 " + $repo + "  •  🕐 " + $time)}]}
+              ] | map(select(. != null))
+            }')
 
-          # 7. 构建卡片内容
-          CARD_JSON='{"config":{"wide_screen_mode":true,"enable_forward":true},"header":{"template":"'"${COLOR}"'","title":{"content":"'"${ICON} ${TITLE}"'","tag":"plain_text"}},"elements":[{"tag":"div","text":{"content":"> '"${SUBTITLE}"'","tag":"lark_md"}},{"tag":"hr"},'"${FIELDS_JSON%,}"',{"tag":"hr"},{"tag":"action","actions":['"${BUTTONS_JSON%,}"']},{"tag":"note","elements":[{"tag":"plain_text","content":"📁 '"${REPO}"'  •  🕐 '"$(date '+%Y-%m-%d %H:%M:%S')"'"}]}]}'
-
-          # 8. 发送消息
+          # 7. 发送消息
           RESPONSE=$(curl -s -X POST "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id" \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/json" \
             -d "{\"receive_id\":\"${FEISHU_CHAT_ID}\",\"msg_type\":\"interactive\",\"content\":$(echo "$CARD_JSON" | jq -c @json)}")
 
           echo "响应: $RESPONSE"
-          echo "$RESPONSE" | grep -q '"code":0' && echo "发送成功！" || { echo "::error::发送失败"; exit 1; }
+          echo "$RESPONSE" | jq -e '.code == 0' > /dev/null && echo "发送成功！" || { echo "::error::发送失败"; exit 1; }
